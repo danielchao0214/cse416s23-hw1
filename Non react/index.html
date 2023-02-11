@@ -14,6 +14,8 @@
 
     <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css" />
     <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
+    <script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
+
 
     <style>
         #map {
@@ -30,44 +32,35 @@
             let reader = new FileReader();
 
             reader.addEventListener('load', function () {
-
-                // console.log(this.result)
-                // var map = L.map('map').setView([1, 1], 1);
-
-                // //this is open street view, not necessary
-                // var color = L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png');
-                // color.addTo(map);
-                // console.log(this.result);
-                // var shape = new L.Shapefile(this.result, {
-                //     onEachFeature: function (feature, layer) {
-
-                //         //this below doesn't work, not sure why
-
-                //         // if (feature.properties) {
-                //         //     layer.bindPopup(
-                //         //         Object.keys(featureproperties).map(function(k) {
-                //         //             return k + ":" + feature.properties[k];
-                //         //         }).join("<br />")
-                //         //     )
-                //         // }
-                //     }
-                // });
-                // shape.addTo(map);
-                // shape.once("data:loaded", function () {
-                //     alert("loaded")
-                // })
                 var map = L.map('map').setView([1, 1], 1)
+                map.doubleClickZoom.disable();
                 var color = L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png');
                 color.addTo(map);
+                let toCombine = new Set();
+                let allData;
                 var geo = L.geoJson({ features: [] }, {
                     onEachFeature: function popUp(feature, layer) {
+                        layer.on({
+                            mouseover: (event) => {
+                                event.target.setStyle({
+                                    fillColor: "yellow",
+                                })
+                            },
+                            mouseout: (event) => {
+                                event.target.setStyle({
+                                    fillColor: "",
+                                })
+                            },
+                            dblclick: (event) => {
+                                toCombine.add(event.target.feature);
+                            }
+                        })
                         var out = [];
                         if (feature.properties) {
                             for (var key in feature.properties) {
-                                //out.push(key + ": " + feature.properties[key]);
-                                if (key.startsWith("NAME")) {
-                                    out.push(key + ": " + feature.properties[key]);
-                                }
+                                // if (key.startsWith("NAME")) {
+                                out.push(key + ": " + feature.properties[key]);
+                                // }
                             }
                             layer.bindPopup(out.join("<br />"));
                         }
@@ -75,16 +68,47 @@
                 }).addTo(map);
 
                 var base = this.result;
-                shp(base).then(function (data) {
+                shp(base).then(function (data) {;
+                    for (let i = 0; i < data.features.length; i++) {
+                        data.features[i]["id"] = i;
+                    }
+                    allData = data;
                     geo.addData(data);
                 });
 
                 // add Leaflet-Geoman controls with some options to the map  
-                map.pm.addControls({  
-                    position: 'topright',  
+                map.pm.addControls({
+                    position: 'topright',
                     drawCircle: false,
-                 // drawControls: false  
-                });  
+                    // drawControls: false  
+                });
+
+
+                map.pm.Toolbar.createCustomControl({
+                    name: "merge",
+                    block: "edit",
+                    title: "merge",
+                    toggle: false,
+                    onClick: function (e) {
+                        let a = Array.from(toCombine);
+
+                        if (a.length >= 2) {
+                            let union = turf.union(a[0], a[1]);
+                            for (let i = 0; i < a.length; i++) {
+                                let idToRemove = a[i].id;
+                                allData.features = allData.features.filter(feature =>  feature["id"] != idToRemove);
+                                union = turf.union(union, a[i]);
+                            }
+                            geo.clearLayers();
+                            geo.addData(allData);
+                            geo.addData(union);
+                            toCombine.clear();
+                        }
+                    }
+                });
+
+
+
             });
 
             reader.readAsArrayBuffer(input.files[0])
