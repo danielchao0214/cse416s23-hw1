@@ -26,7 +26,9 @@
 
 <body>
 
-    <div id="map"></div><input id="shapeinput" type="file" onchange="handleFile(this)">upload map</button>
+    <div id="map"></div><input id="shapeinput" type="file" onchange="handleFile(this)">
+    <input id="name" type="text">
+
     <script>
         function handleFile(input) {
             let reader = new FileReader();
@@ -47,11 +49,16 @@
                                 })
                             },
                             mouseout: (event) => {
-                                event.target.setStyle({
-                                    fillColor: "",
-                                })
+                                if (event.target.options.fillColor === "yellow") {
+                                    event.target.setStyle({
+                                        fillColor: "",
+                                    })
+                                }
                             },
                             dblclick: (event) => {
+                                event.target.setStyle({
+                                    fillColor: "red",
+                                })
                                 toCombine.add(event.target.feature);
                             }
                         })
@@ -68,7 +75,8 @@
                 }).addTo(map);
 
                 var base = this.result;
-                shp(base).then(function (data) {;
+                shp(base).then(function (data) {
+                    ;
                     for (let i = 0; i < data.features.length; i++) {
                         data.features[i]["id"] = i;
                     }
@@ -90,15 +98,17 @@
                     title: "merge",
                     toggle: false,
                     onClick: function (e) {
+
                         let a = Array.from(toCombine);
 
                         if (a.length >= 2) {
                             let union = turf.union(a[0], a[1]);
                             for (let i = 0; i < a.length; i++) {
                                 let idToRemove = a[i].id;
-                                allData.features = allData.features.filter(feature =>  feature["id"] != idToRemove);
+                                allData.features = allData.features.filter(feature => feature["id"] != idToRemove);
                                 union = turf.union(union, a[i]);
                             }
+                            union.properties.name = document.getElementById("name").value;
                             geo.clearLayers();
                             geo.addData(allData);
                             geo.addData(union);
